@@ -109,14 +109,34 @@ async function scrape(code) {
     total += price;
   }
 
+  // Human readable summary for Airtable "IKEA Items" text field
+  const itemsText = [
+    `📦 PAX Design: ${code}`,
+    `🛒 ${items.length} items  |  Total: £${Math.round(total * 100) / 100}`,
+    `─────────────────────────────`,
+    ...items.map((item, i) =>
+      `${i + 1}. ${item.name}\n   SKU: ${item.sku}  |  £${item.unit_price}  |  ${item.dimensions}`
+    ),
+    `─────────────────────────────`,
+    `💰 TOTAL: £${Math.round(total * 100) / 100}`,
+  ].join('\n');
+
+  // Image array for Airtable attachment field
+  // Airtable accepts: [{ url: "https://..." }, ...]
+  const images = items
+    .filter(i => i.image_url)
+    .map(i => ({ url: i.image_url, filename: `${i.name.replace(/\//g, '-')}.jpg` }));
+
   const result = {
-    ok:          true,
-    design_code: code,
-    currency:    'GBP',
-    total:       Math.round(total * 100) / 100,
-    item_count:  items.length,
+    ok:           true,
+    design_code:  code,
+    currency:     'GBP',
+    total:        Math.round(total * 100) / 100,
+    item_count:   items.length,
     items,
-    duration_ms: Date.now() - start,
+    items_text:   itemsText,   // ← clean text for Airtable long text field
+    images,                    // ← array of {url, filename} for Airtable attachment field
+    duration_ms:  Date.now() - start,
   };
 
   console.log(`[pax] ✅ Done — ${items.length} items — £${result.total} — ${result.duration_ms}ms`);
@@ -135,7 +155,7 @@ function startServer(port = 3000) {
 
     if (req.url === '/health' && req.method === 'GET') {
       res.writeHead(200);
-      res.end(JSON.stringify({ ok: true, service: 'pax-scraper', version: '4.0' }));
+      res.end(JSON.stringify({ ok: true, service: 'pax-scraper', version: '5.0' }));
       return;
     }
 
