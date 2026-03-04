@@ -1,0 +1,162 @@
+{
+  "code": "VSQWPG",
+  "items": [
+    {
+      "spr_id": "SPR-39499319",
+      "sku": "39499319",
+      "name": "PAX / HASVIK",
+      "price_gbp": 405,
+      "dimensions": "150x66x236 cm",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-09482240",
+      "sku": "09482240",
+      "name": "PAX / TYSSEDAL",
+      "price_gbp": 516,
+      "dimensions": "175x60x201 cm",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-19478025",
+      "sku": "19478025",
+      "name": "PAX / BERGSBO",
+      "price_gbp": 658,
+      "dimensions": "250x60x236 cm",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-99221371",
+      "sku": "99221371",
+      "name": "PAX / FLISBERGET",
+      "price_gbp": 532,
+      "dimensions": "161/88x201 cm",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-09433221",
+      "sku": "09433221",
+      "name": "PAX / MEHAMN",
+      "price_gbp": 530,
+      "dimensions": "150x66x236 cm",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-49420293",
+      "sku": "49420293",
+      "name": "PAX",
+      "price_gbp": 1032,
+      "dimensions": "211/213x236 cm",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-49478241",
+      "sku": "49478241",
+      "name": "PAX / FARDAL",
+      "price_gbp": 516,
+      "dimensions": "150x60x236 cm",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-79431577",
+      "sku": "79431577",
+      "name": "PAX / FORSAND",
+      "price_gbp": 456,
+      "dimensions": "150x60x236 cm",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-39218512",
+      "sku": "39218512",
+      "name": "PAX / GRIMO",
+      "price_gbp": 445,
+      "dimensions": "110/110x236 cm",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-59478250",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-29478181",
+      "sku": "29478181",
+      "name": "PAX",
+      "price_gbp": 567,
+      "dimensions": "250x58x201 cm",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-89502654",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-89502649",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-19502327",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-99503139",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-69502891",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-79502715",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-79503135",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-79502334",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-29502548",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-79502800",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-79568546",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-79559165",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-39560967",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-39562768",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-29562603",
+      "sku": "29562603",
+      "name": "PAX / STORKLINTA",
+      "price_gbp": 213,
+      "dimensions": "100x60x201 cm",
+      "qty": 1
+    },
+    {
+      "spr_id": "SPR-99562609",
+      "sku": "99562609",
+      "name": "PAX / STORKLINTA",
+      "price_gbp": 294,
+      "dimensions": "100x38x236 cm",
+      "qty": 1
+    }
+  ],
+  "raw_items_url": "https://api.dexf.ikea.com/webplanner/v1/query/items/retailunit/GB/locale/en-GB?filter.itemId=SPR-39499319,SPR-09482240,SPR-19478025,SPR-99221371,SPR-09433221,SPR-49420293,SPR-49478241,SPR-79431577,SPR-39218512,SPR-59478250,SPR-29478181,SPR-89502654,SPR-89502649,SPR-19502327,SPR-99503139,SPR-69502891,SPR-79502715,SPR-79503135,SPR-79502334,SPR-29502548,SPR-79502800,SPR-79568546,SPR-79559165,SPR-39560967,SPR-39562768,SPR-29562603,SPR-99562609&fields=careInstruction,child,complianceInformation,complianceLabel,complianceTechnical,customerBenefit,customerBenefitSummary,customerMaterial,filterAttribute,goodToKnow,image,measure,measureReference,packageMeasure,peopleAndPlanet,priceInformation,priceUnit,retailTag,technicalInformation,validDesignPart,video"
+}

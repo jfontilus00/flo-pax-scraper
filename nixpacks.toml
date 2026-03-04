@@ -1,0 +1,32 @@
+[phases.setup]
+nixPkgs = [
+  "nodejs_20",
+  "chromium",
+  "nss",
+  "nspr",
+  "atk",
+  "at-spi2-atk",
+  "xorg.libX11",
+  "xorg.libXcomposite",
+  "xorg.libXdamage",
+  "xorg.libXext",
+  "xorg.libXfixes",
+  "xorg.libXrandr",
+  "xorg.libxcb",
+  "libxkbcommon",
+  "alsa-lib",
+  "pango",
+  "cairo",
+  "glib",
+  "cups",
+  "dbus",
+  "expat",
+  "libdrm",
+  "mesa"
+]
+
+[phases.install]
+cmds = ["npm install", "npx playwright install chromium"]
+
+[start]
+cmd = "node pax-scraper.js --server"

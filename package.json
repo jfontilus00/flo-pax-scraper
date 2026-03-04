@@ -1,0 +1,16 @@
+{
+  "name": "pax-scraper",
+  "version": "4.0.0",
+  "description": "IKEA PAX design code to item list scraper",
+  "main": "pax-scraper.js",
+  "scripts": {
+    "start": "node pax-scraper.js --server",
+    "test": "node pax-scraper.js VSQWPG"
+  },
+  "dependencies": {
+    "playwright": "1.57.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
