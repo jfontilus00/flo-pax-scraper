@@ -47,11 +47,18 @@ function pickImageUrl(content) {
   );
 }
 
-function deriveProductType(baseName) {
-  const s = String(baseName || "").trim();
+// First "word" of the IKEA product name (PAX / KOMPLEMENT / BERGSBO / etc.)
+function deriveProductType(name) {
+  const s = String(name || "").trim();
   if (!s) return "";
-  // Take left side of " / " (e.g. "PAX / HASVIK" -> "PAX")
-  return s.split(" / ")[0].split(",")[0].trim();
+  const m = s.match(/^[A-Za-z0-9]+/);
+  return (m && m[0]) ? m[0] : s;
+}
+
+function moneyGBP(n) {
+  // Keep it simple (MVP): a readable £ format
+  const v = Number(n) || 0;
+  return `£${v}`;
 }
 
 function sleep(ms) {
@@ -77,10 +84,7 @@ async function getBrowser() {
     const headless = process.env.HEADLESS === "0" ? false : true;
     _browserPromise = chromium.launch({
       headless,
-      args: [
-        "--disable-blink-features=AutomationControlled",
-        "--no-sandbox",
-      ],
+      args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
     });
   }
   return _browserPromise;
@@ -111,7 +115,8 @@ function shouldAbort(url, resourceType) {
     u.includes("/assets/") ||
     u.includes("/pax-gltf") ||
     u.includes("/propping/")
-  ) return true;
+  )
+    return true;
 
   // Abort generic heavy types
   if (resourceType === "image" || resourceType === "media" || resourceType === "font")
@@ -133,7 +138,6 @@ async function capturePlannerData(designCode) {
   });
 
   const page = await context.newPage();
-
   const vpcUrl = `${VPC_BASE}/${designCode}`;
 
   // We capture the *exact* responses we need.
@@ -153,7 +157,7 @@ async function capturePlannerData(designCode) {
       const resp = await route.fetch();
       const status = resp.status();
       const headers = resp.headers();
-      const body = await resp.body(); // captured NOW (no eviction)
+      const body = await resp.body(); // body captured NOW (no eviction)
       vpcCapture = { url, status, body };
       return route.fulfill({ status, headers, body });
     }
@@ -267,22 +271,24 @@ function buildItems(artItems, webplannerData) {
     const entry = byItemId.get(`ART-${itemNo}`);
     const content = entry?.content;
 
+    const price = content?.priceInformation?.salesPrice?.[0]?.priceInclTax || 0;
+
     const baseName = content?.name || `ART-${itemNo}`;
     const product_type = deriveProductType(baseName);
-
-    const price =
-      content?.priceInformation?.salesPrice?.[0]?.priceInclTax || 0;
-
     const dimensions = content?.measureReference?.textMetric || "";
-    const displayName = dimensions ? `${baseName}, ${dimensions}` : baseName;
+
+    const name = dimensions ? `${baseName}, ${dimensions}` : baseName;
 
     items.push({
-      itemNo,                 // <- NEW
-      product_type,           // <- NEW
+      // NEW (requested)
+      itemNo, // "50214560"
+      product_type, // "PAX"
+
+      // Existing fields (kept for compatibility)
       sku: formatSku(itemNo),
-      name: displayName,
+      name,
       qty,
-      unit_price: round2(price),
+      unit_price: price,
       line_total: round2(price * qty),
       image_url: content ? pickImageUrl(content) : "",
       missing_in_webplanner: !content || !entry?.valid,
@@ -297,29 +303,35 @@ function buildItemsText(items, total) {
   lines.push(`🛒 ${items.length} items`);
   lines.push("─────────────────────────────");
   items.forEach((i, idx) => {
+    // Example:
+    // 1. PAX | SKU: 502.145.60 | x2 | Unit £90 | Line £180 | PAX, 100x58x236 cm
     lines.push(
-      `${idx + 1}. ${i.name}\n` +
-      `   Type: ${i.product_type || "-"} | SKU: ${i.sku} | Qty: ${i.qty} | Unit: £${i.unit_price} | Line: £${i.line_total}`
+      `${idx + 1}. ${i.product_type || "ITEM"} | SKU: ${i.sku} | x${i.qty} | Unit ${moneyGBP(
+        i.unit_price
+      )} | Line ${moneyGBP(i.line_total)} | ${i.name}`
     );
   });
   lines.push("─────────────────────────────");
-  lines.push(`💰 TOTAL: £${total}`);
+  lines.push(`💰 TOTAL: ${moneyGBP(total)}`);
   return lines.join("\n");
 }
 
-function buildImages(items) {
-  // Airtable Attachment-compatible array:
-  // [ { url: "...", filename: "..." }, ... ]
-  return items
-    .filter((i) => i.image_url)
-    .map((i) => {
-      const safeType = (i.product_type || "ITEM").replace(/[^\w.-]+/g, "_");
-      const safeSku = String(i.sku || "").replace(/[^\w.-]+/g, "_");
-      return {
-        url: i.image_url,
-        filename: `${safeType}-${safeSku}.jpg`,
-      };
+function buildAirtableImages(items) {
+  const seen = new Set();
+  const images = [];
+  for (const i of items) {
+    if (!i.image_url) continue;
+    if (seen.has(i.image_url)) continue;
+    seen.add(i.image_url);
+
+    const safeType = (i.product_type || "ITEM").replace(/[^\w\-]+/g, "_");
+    const safeSku = String(i.sku || "").replace(/[^\w\-\.]+/g, "_");
+    images.push({
+      url: i.image_url,
+      filename: `${safeType}-${safeSku}.jpg`,
     });
+  }
+  return images;
 }
 
 //
@@ -343,8 +355,9 @@ app.post("/scrape", async (req, res) => {
     const total = round2(items.reduce((s, i) => s + (i.line_total || 0), 0));
     const missing = items.filter((i) => i.missing_in_webplanner).length;
 
-    const items_text = buildItemsText(items, total);   // <- NEW
-    const images = buildImages(items);                 // <- NEW
+    // NEW outputs for Airtable/Make
+    const items_text = buildItemsText(items, total);
+    const images = buildAirtableImages(items);
 
     return res.json({
       design_code: pax_code,
@@ -352,8 +365,12 @@ app.post("/scrape", async (req, res) => {
       total,
       item_count: items.length,
       missing_prices: missing,
-      items_text,   // <- NEW (easy mapping to Airtable long text)
-      images,       // <- NEW (easy mapping to Airtable attachment field)
+
+      // NEW
+      items_text,
+      images, // Airtable attachment-ready [{url, filename}, ...]
+
+      // Existing
       items,
       source: "planner-route-capture(vpc+webplanner)",
       debug,
@@ -368,7 +385,7 @@ app.get("/health", (_, res) => {
   res.json({ ok: true, version: "v12-routefetch-port-items_text-images" });
 });
 
-// IMPORTANT: Railway uses a dynamic port
+// IMPORTANT for Railway: dynamic port
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`[server] PAX scraper listening on :${PORT}`);
