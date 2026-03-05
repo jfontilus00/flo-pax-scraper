@@ -47,19 +47,11 @@ function pickImageUrl(content) {
   );
 }
 
-/**
- * Derive a stable "product_type" for analytics.
- * Examples:
- *  - "PAX / HASVIK" -> "PAX"
- *  - "KOMPLEMENT" -> "KOMPLEMENT"
- *  - "PAX, 100x58x236 cm" -> "PAX"
- */
-function deriveProductType(name) {
-  const n = String(name || "").trim();
-  if (!n) return "";
-  const beforeComma = n.split(",")[0].trim();
-  const beforeSlash = beforeComma.split(" / ")[0].trim();
-  return beforeSlash;
+function baseProductType(name) {
+  const s = String(name || "").trim();
+  if (!s) return "";
+  // Handles "PAX / HASVIK", "KOMPLEMENT", "PAX, 100x58x236 cm"
+  return s.split(" / ")[0].split(",")[0].trim();
 }
 
 function sleep(ms) {
@@ -161,13 +153,12 @@ async function capturePlannerData(designCode) {
       const resp = await route.fetch();
       const status = resp.status();
       const headers = resp.headers();
-      const body = await resp.body(); // <-- body captured NOW (no eviction)
+      const body = await resp.body(); // body captured NOW (no eviction)
       vpcCapture = { url, status, body };
       return route.fulfill({ status, headers, body });
     }
 
     // Capture the Webplanner catalog response the planner page itself loads
-    // (Your intercept test shows a 200 here, but Node/browser-request got 403)
     if (
       url.startsWith(WEBPLANNER_BASE) &&
       url.includes("filter.appId=storageonepax") &&
@@ -212,12 +203,10 @@ async function capturePlannerData(designCode) {
   }
 
   // Wait (a bit) for Webplanner capture.
-  // Not all designs trigger it instantly, so we allow up to 60s.
   let web = null;
   try {
     web = await waitFor(() => webCapture, 60000, "Webplanner capture");
   } catch {
-    // If webplanner never fired, we still return VPC-only items with missing prices.
     web = null;
   }
 
@@ -238,7 +227,6 @@ async function capturePlannerData(designCode) {
       const webJson = JSON.parse(web.body.toString("utf8"));
       webplannerData = webJson?.data || [];
     } catch {
-      // If parsing fails, still allow VPC-only output.
       webplannerData = [];
     }
   }
@@ -285,18 +273,15 @@ function buildItems(artItems, webplannerData) {
     const baseName = content?.name || `ART-${itemNo}`;
     const dimensions = content?.measureReference?.textMetric || "";
 
-    const finalName = dimensions ? `${baseName}, ${dimensions}` : baseName;
+    const product_type = baseProductType(baseName) || "ART";
 
     items.push({
-      // ✅ new fields (requested)
-      itemNo,
-      product_type: deriveProductType(baseName),
-
-      // existing fields
+      itemNo,                 // ✅ NEW
+      product_type,           // ✅ NEW
       sku: formatSku(itemNo),
-      name: finalName,
+      name: dimensions ? `${baseName}, ${dimensions}` : baseName,
       qty,
-      unit_price: round2(price),
+      unit_price: price,
       line_total: round2(price * qty),
       image_url: content ? pickImageUrl(content) : "",
       missing_in_webplanner: !content || !entry?.valid,
@@ -327,9 +312,9 @@ app.post("/scrape", async (req, res) => {
     const total = round2(items.reduce((s, i) => s + (i.line_total || 0), 0));
     const missing = items.filter((i) => i.missing_in_webplanner).length;
 
-    // ✅ new: text summary for Airtable / Make (easy mapping)
+    // ✅ NEW: Ready-to-store text for Airtable/Make
     const items_text = items
-      .map((i) => `${i.name} x${i.qty} @ £${round2(i.unit_price)} = £${round2(i.line_total)}`)
+      .map((i) => `${i.product_type} | ${i.sku} | ${i.name} | x${i.qty} | £${i.unit_price} | £${i.line_total}`)
       .join("\n");
 
     return res.json({
@@ -338,10 +323,7 @@ app.post("/scrape", async (req, res) => {
       total,
       item_count: items.length,
       missing_prices: missing,
-
-      // ✅ new (requested)
-      items_text,
-
+      items_text, // ✅ NEW
       items,
       source: "planner-route-capture(vpc+webplanner)",
       debug,
@@ -353,9 +335,11 @@ app.post("/scrape", async (req, res) => {
 });
 
 app.get("/health", (_, res) => {
-  res.json({ ok: true, version: "v11-routefetch(+itemNo+product_type+items_text)" });
+  res.json({ ok: true, version: "v11-routefetch-port-items_text" });
 });
 
-app.listen(3000, () => {
-  console.log("[server] PAX scraper listening on :3000");
+// ✅ Railway port support (dynamic)
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`[server] PAX scraper listening on :${PORT}`);
 });
