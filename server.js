@@ -4,9 +4,7 @@ const { chromium } = require("playwright");
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
-//
 // IKEA endpoints (GB / en-GB)
-//
 const VPC_BASE =
   "https://api.dexf.ikea.com/vpc/v1/configurations/retailunit/GB/locale/en-GB";
 
@@ -25,9 +23,7 @@ const HEADERS = {
   Referer: "https://www.ikea.com/",
 };
 
-//
 // Helpers
-//
 function formatSku(itemNo) {
   const s = String(itemNo || "").replace(/\D/g, "");
   if (s.length === 8) return `${s.slice(0, 3)}.${s.slice(3, 6)}.${s.slice(6, 8)}`;
@@ -47,18 +43,35 @@ function pickImageUrl(content) {
   );
 }
 
-// First "word" of the IKEA product name (PAX / KOMPLEMENT / BERGSBO / etc.)
-function deriveProductType(name) {
+function baseProductType(name) {
+  // Examples: "PAX", "KOMPLEMENT", etc.
+  // If name looks like "PAX, 100x58x236 cm" -> "PAX"
   const s = String(name || "").trim();
   if (!s) return "";
-  const m = s.match(/^[A-Za-z0-9]+/);
-  return (m && m[0]) ? m[0] : s;
+  return s.split(",")[0].trim().split(" ")[0].trim();
 }
 
-function moneyGBP(n) {
-  // Keep it simple (MVP): a readable £ format
-  const v = Number(n) || 0;
-  return `£${v}`;
+function makeFilename(product_type, name) {
+  // Keep filenames short + stable
+  const pt = (product_type || "IKEA").replace(/[^\w\- ]+/g, "").trim();
+  const n = String(name || "")
+    .replace(/[^\w\- ,x/]+/g, "")
+    .trim()
+    .slice(0, 60);
+  const clean = `${pt}${n ? " - " + n : ""}`.replace(/\s+/g, " ").trim();
+  return `${clean}.jpg`;
+}
+
+function uniqueBy(arr, keyFn) {
+  const seen = new Set();
+  const out = [];
+  for (const x of arr || []) {
+    const k = keyFn(x);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(x);
+  }
+  return out;
 }
 
 function sleep(ms) {
@@ -75,16 +88,17 @@ async function waitFor(condFn, timeoutMs, label) {
   throw new Error(`Timeout waiting for ${label}`);
 }
 
-//
 // Single shared browser (faster). New incognito context per request.
-//
 let _browserPromise = null;
 async function getBrowser() {
   if (!_browserPromise) {
     const headless = process.env.HEADLESS === "0" ? false : true;
     _browserPromise = chromium.launch({
       headless,
-      args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+      args: [
+        "--disable-blink-features=AutomationControlled",
+        "--no-sandbox",
+      ],
     });
   }
   return _browserPromise;
@@ -98,10 +112,8 @@ process.on("SIGINT", async () => {
   process.exit(0);
 });
 
-//
 // CAPTURE via route.fetch() (avoids inspector cache evicted issue)
 // Also ABORT heavy assets to keep memory/caches stable.
-//
 function shouldAbort(url, resourceType) {
   const u = url.toLowerCase();
 
@@ -115,8 +127,7 @@ function shouldAbort(url, resourceType) {
     u.includes("/assets/") ||
     u.includes("/pax-gltf") ||
     u.includes("/propping/")
-  )
-    return true;
+  ) return true;
 
   // Abort generic heavy types
   if (resourceType === "image" || resourceType === "media" || resourceType === "font")
@@ -138,9 +149,10 @@ async function capturePlannerData(designCode) {
   });
 
   const page = await context.newPage();
+
   const vpcUrl = `${VPC_BASE}/${designCode}`;
 
-  // We capture the *exact* responses we need.
+  // We capture the exact responses we need
   let vpcCapture = null; // { url, status, body(Buffer) }
   let webCapture = null; // { url, status, body(Buffer) }
 
@@ -152,17 +164,17 @@ async function capturePlannerData(designCode) {
       return route.abort();
     }
 
-    // Capture the VPC response for this specific designCode
+    // Capture VPC response
     if (url.startsWith(vpcUrl)) {
       const resp = await route.fetch();
       const status = resp.status();
       const headers = resp.headers();
-      const body = await resp.body(); // body captured NOW (no eviction)
+      const body = await resp.body(); // captured now (no eviction)
       vpcCapture = { url, status, body };
       return route.fulfill({ status, headers, body });
     }
 
-    // Capture the Webplanner catalog response the planner page itself loads
+    // Capture Webplanner catalog response
     if (
       url.startsWith(WEBPLANNER_BASE) &&
       url.includes("filter.appId=storageonepax") &&
@@ -185,7 +197,7 @@ async function capturePlannerData(designCode) {
     timeout: 60000,
   });
 
-  // Wait for VPC to be captured
+  // Wait for VPC capture
   const vpc = await waitFor(() => vpcCapture, 60000, "VPC capture");
   if (vpc.status !== 200) {
     await context.close();
@@ -206,7 +218,7 @@ async function capturePlannerData(designCode) {
     throw new Error("VPC returned no items (design invalid or blocked)");
   }
 
-  // Wait (a bit) for Webplanner capture.
+  // Webplanner capture (best effort)
   let web = null;
   try {
     web = await waitFor(() => webCapture, 60000, "Webplanner capture");
@@ -249,9 +261,7 @@ async function capturePlannerData(designCode) {
   };
 }
 
-//
-// Build output: ALWAYS filter webplanner catalog by VPC ART list
-//
+// Build output: filter webplanner catalog by VPC ART list
 function buildItems(artItems, webplannerData) {
   const qtyMap = new Map();
   for (const a of artItems) qtyMap.set(String(a.itemNo), Number(a.quantity) || 1);
@@ -271,22 +281,20 @@ function buildItems(artItems, webplannerData) {
     const entry = byItemId.get(`ART-${itemNo}`);
     const content = entry?.content;
 
-    const price = content?.priceInformation?.salesPrice?.[0]?.priceInclTax || 0;
+    const price =
+      content?.priceInformation?.salesPrice?.[0]?.priceInclTax || 0;
 
     const baseName = content?.name || `ART-${itemNo}`;
-    const product_type = deriveProductType(baseName);
     const dimensions = content?.measureReference?.textMetric || "";
+    const displayName = dimensions ? `${baseName}, ${dimensions}` : baseName;
 
-    const name = dimensions ? `${baseName}, ${dimensions}` : baseName;
+    const product_type = baseProductType(baseName);
 
     items.push({
-      // NEW (requested)
-      itemNo, // "50214560"
-      product_type, // "PAX"
-
-      // Existing fields (kept for compatibility)
+      itemNo,
+      product_type,
       sku: formatSku(itemNo),
-      name,
+      name: displayName,
       qty,
       unit_price: price,
       line_total: round2(price * qty),
@@ -298,47 +306,39 @@ function buildItems(artItems, webplannerData) {
   return items;
 }
 
-function buildItemsText(items, total) {
+function buildItemsText(design_code, currency, total, items) {
   const lines = [];
-  lines.push(`🛒 ${items.length} items`);
+  lines.push(`📦 PAX Design: ${design_code}`);
+  lines.push(`🛒 ${items.length} items | 💰 Total: ${currency} ${total}`);
   lines.push("─────────────────────────────");
+
   items.forEach((i, idx) => {
-    // Example:
-    // 1. PAX | SKU: 502.145.60 | x2 | Unit £90 | Line £180 | PAX, 100x58x236 cm
     lines.push(
-      `${idx + 1}. ${i.product_type || "ITEM"} | SKU: ${i.sku} | x${i.qty} | Unit ${moneyGBP(
-        i.unit_price
-      )} | Line ${moneyGBP(i.line_total)} | ${i.name}`
+      `${idx + 1}. ${i.product_type || "IKEA"} | ${i.sku} | ${i.name} | x${i.qty} | £${i.unit_price} | £${i.line_total}`
     );
   });
+
   lines.push("─────────────────────────────");
-  lines.push(`💰 TOTAL: ${moneyGBP(total)}`);
+  lines.push(`💰 TOTAL: £${total}`);
+
   return lines.join("\n");
 }
 
 function buildAirtableImages(items) {
-  const seen = new Set();
-  const images = [];
-  for (const i of items) {
-    if (!i.image_url) continue;
-    if (seen.has(i.image_url)) continue;
-    seen.add(i.image_url);
-
-    const safeType = (i.product_type || "ITEM").replace(/[^\w\-]+/g, "_");
-    const safeSku = String(i.sku || "").replace(/[^\w\-\.]+/g, "_");
-    images.push({
+  // Airtable attachment format: [{ url, filename }]
+  const imgs = (items || [])
+    .filter((i) => i.image_url)
+    .map((i) => ({
       url: i.image_url,
-      filename: `${safeType}-${safeSku}.jpg`,
-    });
-  }
-  return images;
+      filename: makeFilename(i.product_type, i.name),
+    }));
+
+  return uniqueBy(imgs, (x) => x.url);
 }
 
-//
 // API
-//
 app.post("/scrape", async (req, res) => {
-  const pax_code = (req.body.pax_code || "").trim().toUpperCase();
+  const pax_code = (req.body?.pax_code || "").trim().toUpperCase();
   if (!pax_code) return res.status(400).json({ error: "Missing pax_code" });
 
   console.log(`\n[scrape] START ${pax_code}`);
@@ -355,8 +355,7 @@ app.post("/scrape", async (req, res) => {
     const total = round2(items.reduce((s, i) => s + (i.line_total || 0), 0));
     const missing = items.filter((i) => i.missing_in_webplanner).length;
 
-    // NEW outputs for Airtable/Make
-    const items_text = buildItemsText(items, total);
+    const items_text = buildItemsText(pax_code, "GBP", total, items);
     const images = buildAirtableImages(items);
 
     return res.json({
@@ -366,12 +365,13 @@ app.post("/scrape", async (req, res) => {
       item_count: items.length,
       missing_prices: missing,
 
-      // NEW
+      // Make/Airtable friendly fields
       items_text,
-      images, // Airtable attachment-ready [{url, filename}, ...]
+      images,
 
-      // Existing
+      // Full details
       items,
+
       source: "planner-route-capture(vpc+webplanner)",
       debug,
     });
@@ -385,7 +385,7 @@ app.get("/health", (_, res) => {
   res.json({ ok: true, version: "v12-routefetch-port-items_text-images" });
 });
 
-// IMPORTANT for Railway: dynamic port
+// IMPORTANT: Railway dynamic port support
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`[server] PAX scraper listening on :${PORT}`);
