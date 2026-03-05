@@ -47,10 +47,10 @@ function pickImageUrl(content) {
   );
 }
 
-function baseProductType(name) {
-  const s = String(name || "").trim();
+function deriveProductType(baseName) {
+  const s = String(baseName || "").trim();
   if (!s) return "";
-  // Handles "PAX / HASVIK", "KOMPLEMENT", "PAX, 100x58x236 cm"
+  // Take left side of " / " (e.g. "PAX / HASVIK" -> "PAX")
   return s.split(" / ")[0].split(",")[0].trim();
 }
 
@@ -137,8 +137,8 @@ async function capturePlannerData(designCode) {
   const vpcUrl = `${VPC_BASE}/${designCode}`;
 
   // We capture the *exact* responses we need.
-  let vpcCapture = null;        // { url, status, body(Buffer) }
-  let webCapture = null;        // { url, status, body(Buffer) }
+  let vpcCapture = null; // { url, status, body(Buffer) }
+  let webCapture = null; // { url, status, body(Buffer) }
 
   await page.route("**/*", async (route, request) => {
     const url = request.url();
@@ -153,7 +153,7 @@ async function capturePlannerData(designCode) {
       const resp = await route.fetch();
       const status = resp.status();
       const headers = resp.headers();
-      const body = await resp.body(); // body captured NOW (no eviction)
+      const body = await resp.body(); // captured NOW (no eviction)
       vpcCapture = { url, status, body };
       return route.fulfill({ status, headers, body });
     }
@@ -267,21 +267,22 @@ function buildItems(artItems, webplannerData) {
     const entry = byItemId.get(`ART-${itemNo}`);
     const content = entry?.content;
 
+    const baseName = content?.name || `ART-${itemNo}`;
+    const product_type = deriveProductType(baseName);
+
     const price =
       content?.priceInformation?.salesPrice?.[0]?.priceInclTax || 0;
 
-    const baseName = content?.name || `ART-${itemNo}`;
     const dimensions = content?.measureReference?.textMetric || "";
-
-    const product_type = baseProductType(baseName) || "ART";
+    const displayName = dimensions ? `${baseName}, ${dimensions}` : baseName;
 
     items.push({
-      itemNo,                 // ✅ NEW
-      product_type,           // ✅ NEW
+      itemNo,                 // <- NEW
+      product_type,           // <- NEW
       sku: formatSku(itemNo),
-      name: dimensions ? `${baseName}, ${dimensions}` : baseName,
+      name: displayName,
       qty,
-      unit_price: price,
+      unit_price: round2(price),
       line_total: round2(price * qty),
       image_url: content ? pickImageUrl(content) : "",
       missing_in_webplanner: !content || !entry?.valid,
@@ -289,6 +290,36 @@ function buildItems(artItems, webplannerData) {
   }
 
   return items;
+}
+
+function buildItemsText(items, total) {
+  const lines = [];
+  lines.push(`🛒 ${items.length} items`);
+  lines.push("─────────────────────────────");
+  items.forEach((i, idx) => {
+    lines.push(
+      `${idx + 1}. ${i.name}\n` +
+      `   Type: ${i.product_type || "-"} | SKU: ${i.sku} | Qty: ${i.qty} | Unit: £${i.unit_price} | Line: £${i.line_total}`
+    );
+  });
+  lines.push("─────────────────────────────");
+  lines.push(`💰 TOTAL: £${total}`);
+  return lines.join("\n");
+}
+
+function buildImages(items) {
+  // Airtable Attachment-compatible array:
+  // [ { url: "...", filename: "..." }, ... ]
+  return items
+    .filter((i) => i.image_url)
+    .map((i) => {
+      const safeType = (i.product_type || "ITEM").replace(/[^\w.-]+/g, "_");
+      const safeSku = String(i.sku || "").replace(/[^\w.-]+/g, "_");
+      return {
+        url: i.image_url,
+        filename: `${safeType}-${safeSku}.jpg`,
+      };
+    });
 }
 
 //
@@ -312,10 +343,8 @@ app.post("/scrape", async (req, res) => {
     const total = round2(items.reduce((s, i) => s + (i.line_total || 0), 0));
     const missing = items.filter((i) => i.missing_in_webplanner).length;
 
-    // ✅ NEW: Ready-to-store text for Airtable/Make
-    const items_text = items
-      .map((i) => `${i.product_type} | ${i.sku} | ${i.name} | x${i.qty} | £${i.unit_price} | £${i.line_total}`)
-      .join("\n");
+    const items_text = buildItemsText(items, total);   // <- NEW
+    const images = buildImages(items);                 // <- NEW
 
     return res.json({
       design_code: pax_code,
@@ -323,7 +352,8 @@ app.post("/scrape", async (req, res) => {
       total,
       item_count: items.length,
       missing_prices: missing,
-      items_text, // ✅ NEW
+      items_text,   // <- NEW (easy mapping to Airtable long text)
+      images,       // <- NEW (easy mapping to Airtable attachment field)
       items,
       source: "planner-route-capture(vpc+webplanner)",
       debug,
@@ -335,10 +365,10 @@ app.post("/scrape", async (req, res) => {
 });
 
 app.get("/health", (_, res) => {
-  res.json({ ok: true, version: "v11-routefetch-port-items_text" });
+  res.json({ ok: true, version: "v12-routefetch-port-items_text-images" });
 });
 
-// ✅ Railway port support (dynamic)
+// IMPORTANT: Railway uses a dynamic port
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`[server] PAX scraper listening on :${PORT}`);
