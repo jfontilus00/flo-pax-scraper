@@ -51,6 +51,14 @@ function baseProductType(name) {
   return s.split(",")[0].trim().split(" ")[0].trim();
 }
 
+function currencySymbolFromCode(code) {
+  const c = String(code || "").toUpperCase();
+  if (c === "GBP") return "£";
+  if (c === "EUR") return "€";
+  if (c === "USD") return "$";
+  return "£"; // default for your use-case
+}
+
 function makeFilename(product_type, name) {
   // Keep filenames short + stable
   const pt = (product_type || "IKEA").replace(/[^\w\- ]+/g, "").trim();
@@ -95,10 +103,7 @@ async function getBrowser() {
     const headless = process.env.HEADLESS === "0" ? false : true;
     _browserPromise = chromium.launch({
       headless,
-      args: [
-        "--disable-blink-features=AutomationControlled",
-        "--no-sandbox",
-      ],
+      args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
     });
   }
   return _browserPromise;
@@ -127,7 +132,8 @@ function shouldAbort(url, resourceType) {
     u.includes("/assets/") ||
     u.includes("/pax-gltf") ||
     u.includes("/propping/")
-  ) return true;
+  )
+    return true;
 
   // Abort generic heavy types
   if (resourceType === "image" || resourceType === "media" || resourceType === "font")
@@ -281,8 +287,7 @@ function buildItems(artItems, webplannerData) {
     const entry = byItemId.get(`ART-${itemNo}`);
     const content = entry?.content;
 
-    const price =
-      content?.priceInformation?.salesPrice?.[0]?.priceInclTax || 0;
+    const price = content?.priceInformation?.salesPrice?.[0]?.priceInclTax || 0;
 
     const baseName = content?.name || `ART-${itemNo}`;
     const dimensions = content?.measureReference?.textMetric || "";
@@ -306,24 +311,42 @@ function buildItems(artItems, webplannerData) {
   return items;
 }
 
-function buildItemsText(design_code, currency, total, items) {
+/**
+ * ✅ A) Prettier, client-friendly items_text
+ * Signature stays compatible with your existing call:
+ * buildItemsText(pax_code, "GBP", total, items)
+ */
+function buildItemsText(designCode, currencyCode, total, items) {
+  const currencySymbol = currencySymbolFromCode(currencyCode);
+  const safeTotal = round2(total);
+
   const lines = [];
-  lines.push(`📦 PAX Design: ${design_code}`);
-  lines.push(`🛒 ${items.length} items | 💰 Total: ${currency} ${total}`);
+  lines.push(`📦 PAX Design: ${designCode}`);
+  lines.push(`🛒 ${items.length} items | Total: ${currencySymbol}${safeTotal}`);
   lines.push("─────────────────────────────");
 
   items.forEach((i, idx) => {
-    lines.push(
-      `${idx + 1}. ${i.product_type || "IKEA"} | ${i.sku} | ${i.name} | x${i.qty} | £${i.unit_price} | £${i.line_total}`
-    );
+    const price = round2(i.unit_price || 0);
+    const lineTotal = round2(i.line_total || 0);
+    const qty = Number(i.qty || 1);
+
+    const title = `${idx + 1}. ${(i.product_type || "IKEA")} — ${i.name}`;
+    const detail = `   ItemNo: ${i.itemNo}  |  SKU: ${i.sku}  |  x${qty}  |  ${currencySymbol}${price}  →  ${currencySymbol}${lineTotal}`;
+
+    lines.push(title);
+    lines.push(detail);
+    lines.push(""); // blank line between items
   });
 
   lines.push("─────────────────────────────");
-  lines.push(`💰 TOTAL: £${total}`);
+  lines.push(`💰 TOTAL: ${currencySymbol}${safeTotal}`);
 
   return lines.join("\n");
 }
 
+/**
+ * ✅ B) Airtable attachments + max 8 images + de-dupe by URL
+ */
 function buildAirtableImages(items) {
   // Airtable attachment format: [{ url, filename }]
   const imgs = (items || [])
@@ -333,7 +356,10 @@ function buildAirtableImages(items) {
       filename: makeFilename(i.product_type, i.name),
     }));
 
-  return uniqueBy(imgs, (x) => x.url);
+  const unique = uniqueBy(imgs, (x) => x.url);
+
+  // Limit to keep record clean
+  return unique.slice(0, 8);
 }
 
 // API
@@ -382,7 +408,7 @@ app.post("/scrape", async (req, res) => {
 });
 
 app.get("/health", (_, res) => {
-  res.json({ ok: true, version: "v12-routefetch-port-items_text-images" });
+  res.json({ ok: true, version: "v13-pretty-items_text-limit-images" });
 });
 
 // IMPORTANT: Railway dynamic port support
