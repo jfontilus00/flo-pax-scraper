@@ -1,8 +1,17 @@
 const express = require("express");
+const path = require("path");
 const { chromium } = require("playwright");
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
+
+// ✅ Serve the UI (public/index.html, styles.css, app.js)
+app.use(express.static(path.join(__dirname, "public")));
+
+// ✅ Always return the UI at /
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 // IKEA endpoints (GB / en-GB)
 const VPC_BASE =
