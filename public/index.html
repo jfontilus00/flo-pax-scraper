@@ -1,5 +1,5 @@
-﻿<!doctype html>
-<html lang="en" data-theme="dark">
+<!doctype html>
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -8,185 +8,129 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="left">
-      <div class="brand">
-        <div class="logo">PAX</div>
-        <div class="brandText">
-          <div class="boardName">PAX CRM Board</div>
-          <div class="boardSub">Kanban leads + IKEA PAX fetch (core engine unchanged)</div>
-        </div>
-      </div>
-
-      <div class="searchWrap">
-        <input id="q" class="search" placeholder="Search (customer, postcode, pax code)" />
-        <button id="btnClearSearch" class="iconBtn" title="Clear"></button>
+    <div class="brand">
+      <div class="logo">PAX</div>
+      <div class="brandText">
+        <div class="title">PAX CRM Board</div>
+        <div class="subtitle">Installation lead management</div>
       </div>
     </div>
 
-    <div class="right">
-      <button id="btnAdd" class="btn primary">+ New lead</button>
+    <div class="searchWrap">
+      <input id="search" class="search" placeholder="Search customer, postcode, PAX code, notes…" />
+    </div>
+
+    <div class="actions">
+      <div class="viewToggle">
+        <button class="viewBtn active" id="btnViewBoard">⬛ Board</button>
+        <button class="viewBtn" id="btnViewTable">☰ Table</button>
+      </div>
+      <div class="btnGroup" style="position:relative">
+        <button id="btnAdd" class="btn primary">+ New lead</button>
+        <button id="btnAddTpl" class="btn primary tplArrow" title="From template">▾</button>
+        <div class="tplMenu hidden" id="tplMenu"></div>
+      </div>
       <button id="btnExport" class="btn">Export</button>
-      <label class="btn file">
-        Import
-        <input id="fileImport" type="file" accept="application/json" />
-      </label>
-      <button id="btnSettings" class="btn">Settings</button>
+      <label class="btn file">Import<input id="fileImport" type="file" accept="application/json" /></label>
+      <button id="btnSettings" class="btn">⚙ Settings</button>
       <button id="btnReset" class="btn danger">Reset</button>
     </div>
   </header>
 
-  <div class="layout">
-    <main id="board" class="board"></main>
+  <div class="statsBar" id="statsBar"></div>
 
-    <aside id="drawer" class="drawer hidden" aria-hidden="true">
+  <main class="layout" id="layout">
+    <section class="boardWrap" id="boardWrap">
+      <section class="board" id="board"></section>
+    </section>
+
+    <div class="tableWrap hidden" id="tableWrap">
+      <div class="tableScroll">
+        <table class="dataTable" id="dataTable">
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <aside class="drawer hidden" id="drawer">
       <div class="drawerHead">
-        <div class="drawerTitle">
-          <div class="drawerH1" id="drawerCustomer">Lead</div>
-          <div class="drawerMeta" id="drawerMeta">Select a card to open details</div>
+        <div>
+          <div class="drawerTitle">Lead details</div>
+          <div class="drawerSub" id="drawerSub">Select a card</div>
         </div>
-        <button id="btnCloseDrawer" class="iconBtn" title="Close"></button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="iconBtn" id="btnPrevCard" title="Previous">←</button>
+          <button class="iconBtn" id="btnNextCard" title="Next">→</button>
+          <button class="iconBtn" id="btnCloseDrawer">✕</button>
+        </div>
       </div>
-
-      <div class="drawerBody">
-        <div class="formGrid">
-          <div class="field">
-            <label>Customer</label>
-            <input id="fCustomer" />
-          </div>
-
-          <div class="field">
-            <label>Status</label>
-            <select id="fStatus"></select>
-          </div>
-
-          <div class="field">
-            <label>Phone</label>
-            <input id="fPhone" placeholder="07..." />
-          </div>
-
-          <div class="field">
-            <label>Postcode</label>
-            <input id="fPostcode" placeholder="WD23 3EA" />
-          </div>
-
-          <div class="field">
-            <label>PAX Code</label>
-            <input id="fPax" placeholder="VSQWPG" />
-          </div>
-
-          <div class="field">
-            <label>Schedule date</label>
-            <input id="fSchedule" type="date" />
-          </div>
-        </div>
-
-        <div class="metrics">
-          <div class="metric">
-            <div class="k">IKEA Total</div>
-            <div class="v" id="mTotal"></div>
-          </div>
-          <div class="metric">
-            <div class="k">Items</div>
-            <div class="v" id="mCount"></div>
-          </div>
-          <div class="metric">
-            <div class="k">Last fetched</div>
-            <div class="v" id="mFetched"></div>
-          </div>
-        </div>
-
-        <div class="drawerBtns">
-          <button id="btnFetch" class="btn primary">Fetch items</button>
-          <button id="btnToggleDetails" class="btn">Show items</button>
-          <button id="btnDelete" class="btn danger">Delete</button>
-        </div>
-
-        <section id="details" class="details hidden">
-          <pre id="itemsText" class="itemsText"></pre>
-          <div id="images" class="images"></div>
-        </section>
-
-        <div id="drawerError" class="error hidden"></div>
+      <div class="drawerTabs" id="drawerTabs">
+        <button class="drawerTab active" data-tab="details">Details</button>
+        <button class="drawerTab" data-tab="items">Items</button>
+        <button class="drawerTab" data-tab="activity">Activity</button>
       </div>
+      <div class="drawerBody" id="drawerBody"></div>
     </aside>
-  </div>
+  </main>
 
   <template id="cardTpl">
-    <article class="card" draggable="true">
-      <div class="cardTop">
-        <div class="cardTitle">
-          <div class="customer"></div>
-          <div class="sub">
-            <span class="pax"></span>
-            <span class="dot"></span>
-            <span class="postcode"></span>
-          </div>
-        </div>
-        <div class="pill status"></div>
-      </div>
-
-      <div class="cardBottom">
-        <div class="miniKpi">
-          <div class="k">Total</div>
-          <div class="v total"></div>
-        </div>
-        <div class="miniKpi">
-          <div class="k">Items</div>
-          <div class="v count"></div>
-        </div>
-        <div class="miniKpi">
-          <div class="k">Updated</div>
-          <div class="v fetched"></div>
+    <article class="card" tabindex="0" draggable="true">
+      <div class="cardTopRow">
+        <div class="accentDot"></div>
+        <input class="customer" placeholder="Customer name" />
+        <div class="cardTopRight">
+          <div class="priorityBadge"></div>
+          <div class="notesDot hidden" title="Has notes">●</div>
         </div>
       </div>
+      <div class="cardStatusRow">
+        <div class="statusChip"></div>
+        <div class="depositChip hidden"></div>
+        <div class="overduePill hidden">⚠ Overdue</div>
+      </div>
+      <div class="fields"></div>
+      <div class="meta hidden">
+        <div><span class="k">IKEA</span><span class="v total"></span></div>
+        <div><span class="k">Budget</span><span class="v budgetV"></span></div>
+        <div><span class="k">Items</span><span class="v count"></span></div>
+      </div>
+      <div class="cardBtns">
+        <button class="btn mini primary fetch">⚡ Fetch</button>
+        <button class="btn mini open">Open →</button>
+      </div>
+      <div class="error hidden"></div>
     </article>
   </template>
 
-  <dialog id="settingsDlg" class="dlg">
-    <div class="dlgHead">
-      <div class="dlgTitle">Settings</div>
-      <button id="btnCloseSettings" class="iconBtn" title="Close"></button>
-    </div>
-
-    <div class="dlgBody">
-      <div class="settingRow">
-        <div>
-          <div class="settingName">Theme</div>
-          <div class="settingDesc">Switch between dark / light</div>
-        </div>
-        <button id="btnTheme" class="btn">Toggle</button>
+  <div class="modal hidden" id="settingsModal" role="dialog" aria-modal="true">
+    <div class="modalCard wide">
+      <div class="modalHead">
+        <div class="modalTitle">⚙ Settings</div>
+        <button class="iconBtn" id="btnCloseSettings">✕</button>
       </div>
-
-      <div class="settingRow">
-        <div>
-          <div class="settingName">Auto-open drawer after fetch</div>
-          <div class="settingDesc">After you fetch items, keep the drawer open on the result</div>
-        </div>
-        <label class="switch">
-          <input id="optAutoOpen" type="checkbox" />
-          <span class="slider"></span>
-        </label>
+      <div class="modalTabs" id="modalTabs">
+        <button class="modalTab active" data-mtab="general">General</button>
+        <button class="modalTab" data-mtab="columns">Columns</button>
+        <button class="modalTab" data-mtab="fields">Fields</button>
+        <button class="modalTab" data-mtab="custom">Custom fields</button>
+        <button class="modalTab" data-mtab="templates">Templates</button>
       </div>
-
-      <div class="settingRow">
-        <div>
-          <div class="settingName">Currency</div>
-          <div class="settingDesc">Display-only (engine still returns GBP)</div>
-        </div>
-        <select id="optCurrency" class="select">
-          <option value="GBP">GBP (£)</option>
-          <option value="EUR">EUR (€)</option>
-          <option value="USD">USD ($)</option>
-        </select>
+      <div class="modalBody" id="modalBody"></div>
+      <div class="modalFoot">
+        <button class="btn" id="btnCancelSettings">Cancel</button>
+        <button class="btn primary" id="btnSaveSettings">Save settings</button>
       </div>
     </div>
+  </div>
 
-    <div class="dlgFoot">
-      <button id="btnSaveSettings" class="btn primary">Save</button>
+  <div class="lightbox hidden" id="lightbox">
+    <div class="lightboxInner" id="lightboxInner">
+      <button class="lightboxClose" id="lightboxClose">✕</button>
+      <img id="lightboxImg" src="" alt="" />
+      <div class="lightboxCaption" id="lightboxCaption"></div>
     </div>
-  </dialog>
-
-  <div id="toast" class="toast hidden"></div>
+  </div>
 
   <script src="./app.js"></script>
 </body>
